@@ -1,0 +1,257 @@
+"use client"
+
+import type React from "react"
+
+import { useState, useCallback } from "react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Upload, FileText, CheckCircle, XCircle, Sparkles, Copy, Download, Minimize2, ArrowRight } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+
+export default function JsonFormatter() {
+  const [jsonInput, setJsonInput] = useState("")
+  const [formattedJson, setFormattedJson] = useState("")
+  const [isValid, setIsValid] = useState<boolean | null>(null)
+  const [error, setError] = useState("")
+  const { toast } = useToast()
+
+  const validateAndFormat = useCallback((input: string) => {
+    if (!input.trim()) {
+      setIsValid(null)
+      setError("")
+      setFormattedJson("")
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(input)
+      setIsValid(true)
+      setError("")
+      // Auto-format with 2 spaces indentation
+      setFormattedJson(JSON.stringify(parsed, null, 2))
+    } catch (err) {
+      setIsValid(false)
+      setError(err instanceof Error ? err.message : "Invalid JSON")
+      setFormattedJson("")
+    }
+  }, [])
+
+  const handleInputChange = (value: string) => {
+    setJsonInput(value)
+    validateAndFormat(value)
+  }
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (file && file.type === "application/json") {
+      const reader = new FileReader()
+      reader.onload = (e) => {
+        const content = e.target?.result as string
+        setJsonInput(content)
+        validateAndFormat(content)
+      }
+      reader.readAsText(file)
+    }
+  }
+
+  const beautifyJson = () => {
+    if (isValid && jsonInput) {
+      try {
+        const parsed = JSON.parse(jsonInput)
+        const beautified = JSON.stringify(parsed, null, 2)
+        setFormattedJson(beautified)
+      } catch (err) {
+        console.error("Error beautifying JSON:", err)
+      }
+    }
+  }
+
+  const minifyJson = () => {
+    if (isValid && jsonInput) {
+      try {
+        const parsed = JSON.parse(jsonInput)
+        const minified = JSON.stringify(parsed)
+        setFormattedJson(minified)
+      } catch (err) {
+        console.error("Error minifying JSON:", err)
+      }
+    }
+  }
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(formattedJson)
+    toast({
+      title: "Copied!",
+      description: "JSON copied to clipboard",
+      duration: 2000,
+    })
+  }
+
+  const downloadJson = () => {
+    if (formattedJson) {
+      const blob = new Blob([formattedJson], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "formatted.json"
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-950 p-4 text-gray-200">
+      <div className="max-w-full mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-3xl font-bold text-gray-100">JSON Formatter & Validator</h1>
+        </div>
+
+        <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-start">
+          {/* Input Section */}
+          <Card className="h-fit bg-gray-900 border-gray-800">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-lg text-gray-100">
+                  <FileText className="w-4 h-4" />
+                  JSON Input
+                </CardTitle>
+                <div className="flex items-center gap-2">
+                  {isValid === true && (
+                    <Badge variant="default" className="bg-green-700 text-xs">
+                      <CheckCircle className="w-3 h-3 mr-1" />
+                      Valid
+                    </Badge>
+                  )}
+                  {isValid === false && (
+                    <Badge variant="destructive" className="text-xs">
+                      <XCircle className="w-3 h-3 mr-1" />
+                      Invalid
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {/* JSON Input Textarea */}
+              <Textarea
+                placeholder="Paste your JSON here..."
+                value={jsonInput}
+                onChange={(e) => handleInputChange(e.target.value)}
+                className="min-h-[650px] font-['Roboto_Mono'] text-xs leading-relaxed bg-gray-800 border-gray-700 text-gray-100 resize-none"
+              />
+
+              {/* Error Display */}
+              {error && (
+                <Alert variant="destructive" className="mt-3 bg-red-900 border-red-800">
+                  <XCircle className="h-3 w-3" />
+                  <AlertDescription className="text-xs">{error}</AlertDescription>
+                </Alert>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Action Buttons Divider */}
+          <div className="flex flex-col items-center justify-center min-h-[600px]">
+            <div className="bg-gray-800 rounded-lg border border-gray-700 shadow-md p-4 space-y-3 w-40">
+              <Button variant="outline" size="sm" className="w-full relative overflow-hidden border-gray-600 text-gray-300 hover:bg-gray-700">
+                <Upload className="w-3 h-3 mr-1" />
+                Upload JSON
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  onChange={handleFileUpload}
+                  className="absolute inset-0 opacity-0 cursor-pointer"
+                />
+              </Button>
+
+              <div className="border-t border-gray-700 pt-3">
+                <div className="text-center mb-3">
+                  <ArrowRight className="w-5 h-5 mx-auto text-gray-400" />
+                </div>
+                
+                <div className="space-y-3">
+                  <Button
+                    onClick={beautifyJson}
+                    disabled={!isValid}
+                    size="sm"
+                    className="w-full bg-gray-700 hover:bg-gray-600"
+                  >
+                    <Sparkles className="w-3 h-3 mr-1" />
+                    Beautify
+                  </Button>
+
+                  <Button
+                    onClick={minifyJson}
+                    disabled={!isValid}
+                    variant="outline"
+                    size="sm"
+                    className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
+                  >
+                    <Minimize2 className="w-3 h-3 mr-1" />
+                    Minify
+                  </Button>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-700 pt-3 space-y-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={copyToClipboard}
+                  disabled={!formattedJson}
+                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  <Copy className="w-3 h-3 mr-1" />
+                  Copy
+                </Button>
+
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={downloadJson}
+                  disabled={!formattedJson}
+                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
+                >
+                  <Download className="w-3 h-3 mr-1" />
+                  Download
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Output Section */}
+          <Card className="h-fit bg-gray-900 border-gray-800">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-lg text-gray-100">
+                <Sparkles className="w-4 h-4" />
+                Formatted JSON
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-0">
+              {formattedJson ? (
+                <Textarea
+                  value={formattedJson}
+                  readOnly
+                  className="min-h-[650px] font-['Roboto_Mono'] text-xs leading-relaxed bg-gray-800 border-gray-700 text-gray-100 resize-none"
+                />
+              ) : (
+                <div className="min-h-[650px] border-2 border-dashed border-gray-700 rounded-lg flex items-center justify-center bg-gray-800">
+                  <div className="text-center text-gray-400">
+                    <FileText className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">Formatted JSON will appear here</p>
+                    <p className="text-xs">Enter valid JSON on the left to see the result</p>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  )
+}
