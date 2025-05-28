@@ -109,6 +109,12 @@ export default function JsonFormatter() {
       <div className="max-w-full mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-gray-100">JSON Formatter & Validator</h1>
+          {isValid === false && error && (
+            <Alert variant="destructive" className="ml-4 bg-red-900 border-red-800 w-auto">
+              <XCircle className="h-4 w-4 text-white" />
+              <AlertDescription className="text-sm text-white">{error}</AlertDescription>
+            </Alert>
+          )}
         </div>
 
         <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-start">
@@ -144,14 +150,6 @@ export default function JsonFormatter() {
                 onChange={(e) => handleInputChange(e.target.value)}
                 className="min-h-[650px] font-['Roboto_Mono'] text-xs leading-relaxed bg-gray-800 border-gray-700 text-gray-100 resize-none"
               />
-
-              {/* Error Display */}
-              {error && (
-                <Alert variant="destructive" className="mt-3 bg-red-900 border-red-800">
-                  <XCircle className="h-3 w-3" />
-                  <AlertDescription className="text-xs">{error}</AlertDescription>
-                </Alert>
-              )}
             </CardContent>
           </Card>
 
@@ -178,8 +176,9 @@ export default function JsonFormatter() {
                   <Button
                     onClick={beautifyJson}
                     disabled={!isValid}
+                    variant="outline"
                     size="sm"
-                    className="w-full bg-gray-700 hover:bg-gray-600"
+                    className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Sparkles className="w-3 h-3 mr-1" />
                     Beautify
@@ -190,7 +189,7 @@ export default function JsonFormatter() {
                     disabled={!isValid}
                     variant="outline"
                     size="sm"
-                    className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
+                    className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Minimize2 className="w-3 h-3 mr-1" />
                     Minify
@@ -198,13 +197,13 @@ export default function JsonFormatter() {
                 </div>
               </div>
 
-              <div className="border-t border-gray-700 pt-3 space-y-2">
+              <div className="border-gray-700 space-y-2">
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={copyToClipboard}
                   disabled={!formattedJson}
-                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
+                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Copy className="w-3 h-3 mr-1" />
                   Copy
@@ -215,7 +214,7 @@ export default function JsonFormatter() {
                   variant="outline"
                   onClick={downloadJson}
                   disabled={!formattedJson}
-                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700"
+                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Download className="w-3 h-3 mr-1" />
                   Download
