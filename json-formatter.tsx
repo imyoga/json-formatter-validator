@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
@@ -10,6 +10,71 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Upload, FileText, CheckCircle, XCircle, Sparkles, Copy, Download, Minimize2, ArrowRight } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+
+// Custom component for textarea with line numbers
+interface LineNumberTextareaProps {
+  value: string
+  onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
+  placeholder?: string
+  readOnly?: boolean
+  className?: string
+}
+
+function LineNumberTextarea({ value, onChange, placeholder, readOnly, className }: LineNumberTextareaProps) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const lineNumbersRef = useRef<HTMLDivElement>(null)
+
+  const lines = value.split('\n')
+  const lineCount = lines.length
+
+  const handleScroll = () => {
+    if (textareaRef.current && lineNumbersRef.current) {
+      lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop
+    }
+  }
+
+  useEffect(() => {
+    const textarea = textareaRef.current
+    if (textarea) {
+      textarea.addEventListener('scroll', handleScroll)
+      return () => textarea.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
+
+  return (
+    <div className="relative flex">
+      {/* Line numbers */}
+      <div
+        ref={lineNumbersRef}
+        className="flex-shrink-0 bg-gray-750 border-r border-gray-600 text-gray-400 text-xs font-['Roboto_Mono'] leading-relaxed overflow-hidden"
+        style={{
+          width: `${Math.max(2, Math.floor(Math.log10(lineCount)) + 1) * 0.6 + 1}rem`,
+          maxHeight: '650px'
+        }}
+      >
+        {Array.from({ length: lineCount }, (_, i) => (
+          <div
+            key={i + 1}
+            className="px-2 text-right select-none"
+            style={{ height: '1.5rem', lineHeight: '1.5rem' }}
+          >
+            {i + 1}
+          </div>
+        ))}
+      </div>
+      
+      {/* Textarea */}
+      <Textarea
+        ref={textareaRef}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        readOnly={readOnly}
+        className={`${className} rounded-l-none border-l-0`}
+      />
+    </div>
+  )
+}
 
 export default function JsonFormatter() {
   const [jsonInput, setJsonInput] = useState("")
@@ -39,7 +104,8 @@ export default function JsonFormatter() {
     }
   }, [])
 
-  const handleInputChange = (value: string) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
     setJsonInput(value)
     validateAndFormat(value)
   }
@@ -143,11 +209,11 @@ export default function JsonFormatter() {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              {/* JSON Input Textarea */}
-              <Textarea
+              {/* JSON Input Textarea with Line Numbers */}
+              <LineNumberTextarea
                 placeholder="Paste your JSON here..."
                 value={jsonInput}
-                onChange={(e) => handleInputChange(e.target.value)}
+                onChange={handleInputChange}
                 className="min-h-[650px] font-['Roboto_Mono'] text-xs leading-relaxed bg-gray-800 border-gray-700 text-gray-100 resize-none"
               />
             </CardContent>
@@ -156,7 +222,7 @@ export default function JsonFormatter() {
           {/* Action Buttons Divider */}
           <div className="flex flex-col items-center justify-center min-h-[600px]">
             <div className="bg-gray-800 rounded-lg border border-gray-700 shadow-md p-4 space-y-3 w-40">
-              <Button variant="outline" size="sm" className="w-full relative overflow-hidden border-gray-600 text-gray-300 hover:bg-gray-700">
+              <Button variant="outline" size="sm" className="w-full relative overflow-hidden bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 transition-colors">
                 <Upload className="w-3 h-3 mr-1" />
                 Upload JSON
                 <input
@@ -178,7 +244,7 @@ export default function JsonFormatter() {
                     disabled={!isValid}
                     variant="outline"
                     size="sm"
-                    className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
                   >
                     <Sparkles className="w-3 h-3 mr-1" />
                     Beautify
@@ -189,7 +255,7 @@ export default function JsonFormatter() {
                     disabled={!isValid}
                     variant="outline"
                     size="sm"
-                    className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
                   >
                     <Minimize2 className="w-3 h-3 mr-1" />
                     Minify
@@ -203,7 +269,7 @@ export default function JsonFormatter() {
                   variant="outline"
                   onClick={copyToClipboard}
                   disabled={!formattedJson}
-                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
                 >
                   <Copy className="w-3 h-3 mr-1" />
                   Copy
@@ -214,7 +280,7 @@ export default function JsonFormatter() {
                   variant="outline"
                   onClick={downloadJson}
                   disabled={!formattedJson}
-                  className="w-full border-gray-600 text-gray-300 hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
                 >
                   <Download className="w-3 h-3 mr-1" />
                   Download
@@ -233,7 +299,7 @@ export default function JsonFormatter() {
             </CardHeader>
             <CardContent className="pt-0">
               {formattedJson ? (
-                <Textarea
+                <LineNumberTextarea
                   value={formattedJson}
                   readOnly
                   className="min-h-[650px] font-['Roboto_Mono'] text-xs leading-relaxed bg-gray-800 border-gray-700 text-gray-100 resize-none"
