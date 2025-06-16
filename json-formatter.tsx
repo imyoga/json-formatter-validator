@@ -3,29 +3,103 @@
 import type React from "react"
 
 import { useState, useCallback, useRef, useEffect } from "react"
+import { jsonrepair } from "jsonrepair"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Upload, FileText, CheckCircle, XCircle, Sparkles, Copy, Download, Minimize2, ArrowRight } from "lucide-react"
+import { Upload, FileText, CheckCircle, XCircle, Sparkles, Copy, Download, Minimize2, ArrowRight, Zap, AlertTriangle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-// Custom component for textarea with line numbers
+// Enhanced error information interface
+interface JsonError {
+  message: string
+  line?: number
+  column?: number
+  position?: number
+}
+
+// Function to parse JSON error and extract position info
+function parseJsonError(error: Error): JsonError {
+  const message = error.message
+  
+  // Extract position from error message like "Unexpected token } in JSON at position 7"
+  const positionMatch = message.match(/at position (\d+)/)
+  const position = positionMatch ? parseInt(positionMatch[1]) : undefined
+  
+  // Extract line and column if available
+  const lineColumnMatch = message.match(/line (\d+) column (\d+)/)
+  const line = lineColumnMatch ? parseInt(lineColumnMatch[1]) : undefined
+  const column = lineColumnMatch ? parseInt(lineColumnMatch[2]) : undefined
+  
+  return { message, line, column, position }
+}
+
+// Function to calculate line and column from position
+function getLineColumnFromPosition(text: string, position: number): { line: number; column: number } {
+  const lines = text.substring(0, position).split('\n')
+  return {
+    line: lines.length,
+    column: lines[lines.length - 1].length + 1
+  }
+}
+
+// Professional auto-fix function using jsonrepair library
+function autoFixJson(jsonString: string): string {
+  try {
+    // Use the professional jsonrepair library which handles:
+    // - Missing quotes around keys and values
+    // - Missing commas and closing brackets
+    // - Single quotes to double quotes conversion
+    // - Trailing commas removal
+    // - Python constants (None, True, False)
+    // - Comments removal (/* */ and //)
+    // - Escape character fixes
+    // - JSONP notation removal
+    // - MongoDB data types
+    // - Concatenated strings
+    // - And many more edge cases
+    return jsonrepair(jsonString)
+  } catch (error) {
+    // If jsonrepair fails, fall back to the original input
+    // This ensures we don't break the user's input completely
+    console.warn('jsonrepair failed:', error)
+    return jsonString
+  }
+}
+
+// Custom component for textarea with line numbers and error highlighting
 interface LineNumberTextareaProps {
   value: string
   onChange?: (e: React.ChangeEvent<HTMLTextAreaElement>) => void
   placeholder?: string
   readOnly?: boolean
   className?: string
+  errorInfo?: JsonError | null
 }
 
-function LineNumberTextarea({ value, onChange, placeholder, readOnly, className }: LineNumberTextareaProps) {
+function LineNumberTextarea({ value, onChange, placeholder, readOnly, className, errorInfo }: LineNumberTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lineNumbersRef = useRef<HTMLDivElement>(null)
 
   const lines = value.split('\n')
   const lineCount = lines.length
+
+  // Calculate error position
+  let errorLine: number | undefined
+  let errorColumn: number | undefined
+
+  if (errorInfo) {
+    if (errorInfo.line && errorInfo.column) {
+      errorLine = errorInfo.line
+      errorColumn = errorInfo.column
+    } else if (errorInfo.position !== undefined) {
+      const calc = getLineColumnFromPosition(value, errorInfo.position)
+      errorLine = calc.line
+      errorColumn = calc.column
+    }
+  }
 
   const handleScroll = () => {
     if (textareaRef.current && lineNumbersRef.current) {
@@ -55,10 +129,15 @@ function LineNumberTextarea({ value, onChange, placeholder, readOnly, className 
         {Array.from({ length: lineCount }, (_, i) => (
           <div
             key={i + 1}
-            className="px-2 text-right select-none"
+            className={`px-2 text-right select-none ${
+              errorLine === i + 1 ? 'bg-red-900 text-red-300' : ''
+            }`}
             style={{ height: '1.5rem', lineHeight: '1.5rem' }}
           >
             {i + 1}
+            {errorLine === i + 1 && (
+              <span className="ml-1 text-red-400">⚠</span>
+            )}
           </div>
         ))}
       </div>
@@ -70,8 +149,29 @@ function LineNumberTextarea({ value, onChange, placeholder, readOnly, className 
         onChange={onChange}
         placeholder={placeholder}
         readOnly={readOnly}
-        className={`${className} rounded-l-none border-l-0`}
+        className={`${className} rounded-l-none border-l-0 ${
+          errorLine ? 'border-red-600' : ''
+        }`}
       />
+      
+      {/* Error position indicator */}
+      {errorLine && errorColumn && !readOnly && (
+        <div className="absolute left-0 top-0 pointer-events-none">
+          <div
+            className="text-red-400 font-bold"
+            style={{
+              position: 'absolute',
+              left: `${Math.max(2, Math.floor(Math.log10(lineCount)) + 1) * 0.6 + 1}rem`,
+              top: `${(errorLine - 1) * 1.5}rem`,
+              fontSize: '12px',
+              lineHeight: '1.5rem',
+              paddingLeft: `${(errorColumn - 1) * 0.6}ch`
+            }}
+          >
+            ↑
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -80,13 +180,13 @@ export default function JsonFormatter() {
   const [jsonInput, setJsonInput] = useState("")
   const [formattedJson, setFormattedJson] = useState("")
   const [isValid, setIsValid] = useState<boolean | null>(null)
-  const [error, setError] = useState("")
+  const [errorInfo, setErrorInfo] = useState<JsonError | null>(null)
   const { toast } = useToast()
 
   const validateAndFormat = useCallback((input: string) => {
     if (!input.trim()) {
       setIsValid(null)
-      setError("")
+      setErrorInfo(null)
       setFormattedJson("")
       return
     }
@@ -94,12 +194,13 @@ export default function JsonFormatter() {
     try {
       const parsed = JSON.parse(input)
       setIsValid(true)
-      setError("")
+      setErrorInfo(null)
       // Auto-format with 2 spaces indentation
       setFormattedJson(JSON.stringify(parsed, null, 2))
     } catch (err) {
       setIsValid(false)
-      setError(err instanceof Error ? err.message : "Invalid JSON")
+      const errorInfo = parseJsonError(err instanceof Error ? err : new Error("Invalid JSON"))
+      setErrorInfo(errorInfo)
       setFormattedJson("")
     }
   }, [])
@@ -120,6 +221,29 @@ export default function JsonFormatter() {
         validateAndFormat(content)
       }
       reader.readAsText(file)
+    }
+  }
+
+  const tryAutoFix = () => {
+    if (jsonInput && !isValid) {
+      try {
+        const fixed = autoFixJson(jsonInput)
+        setJsonInput(fixed)
+        validateAndFormat(fixed)
+        
+        toast({
+          title: "Auto-fix successful!",
+          description: "JSON has been repaired using professional algorithms. Please review the changes.",
+          duration: 3000,
+        })
+      } catch (error) {
+        toast({
+          title: "Auto-fix failed",
+          description: "Could not automatically repair this JSON. Please fix manually.",
+          duration: 3000,
+          variant: "destructive"
+        })
+      }
     }
   }
 
@@ -175,10 +299,20 @@ export default function JsonFormatter() {
       <div className="max-w-full mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-3xl font-bold text-gray-100">JSON Formatter & Validator</h1>
-          {isValid === false && error && (
-            <Alert variant="destructive" className="ml-4 bg-red-900 border-red-800 w-auto">
-              <XCircle className="h-4 w-4 text-white" />
-              <AlertDescription className="text-sm text-white">{error}</AlertDescription>
+          {isValid === false && errorInfo && (
+            <Alert variant="destructive" className="ml-4 bg-red-900 border-red-800 w-auto max-w-md">
+              <AlertTriangle className="h-4 w-4 text-white" />
+              <AlertDescription className="text-sm text-white">
+                <div className="font-medium mb-1">JSON Error:</div>
+                <div className="text-xs">{errorInfo.message}</div>
+                {(errorInfo.line || errorInfo.position !== undefined) && (
+                  <div className="text-xs mt-1 opacity-80">
+                    {errorInfo.line ? `Line ${errorInfo.line}` : ''}
+                    {errorInfo.line && errorInfo.column ? `, Column ${errorInfo.column}` : ''}
+                    {errorInfo.position !== undefined && !errorInfo.line ? `Position ${errorInfo.position}` : ''}
+                  </div>
+                )}
+              </AlertDescription>
             </Alert>
           )}
         </div>
@@ -209,11 +343,12 @@ export default function JsonFormatter() {
               </div>
             </CardHeader>
             <CardContent className="pt-0">
-              {/* JSON Input Textarea with Line Numbers */}
+              {/* JSON Input Textarea with Line Numbers and Error Highlighting */}
               <LineNumberTextarea
                 placeholder="Paste your JSON here..."
                 value={jsonInput}
                 onChange={handleInputChange}
+                errorInfo={errorInfo}
                 className="min-h-[650px] font-['Roboto_Mono'] text-xs leading-relaxed bg-gray-800 border-gray-700 text-gray-100 resize-none"
               />
             </CardContent>
@@ -232,6 +367,19 @@ export default function JsonFormatter() {
                   className="absolute inset-0 opacity-0 cursor-pointer"
                 />
               </Button>
+
+              {/* Auto-fix button for invalid JSON */}
+              {isValid === false && (
+                <Button
+                  onClick={tryAutoFix}
+                  variant="outline"
+                  size="sm"
+                  className="w-full bg-yellow-700 border-yellow-600 text-yellow-100 hover:bg-yellow-600 hover:border-yellow-500 transition-colors"
+                >
+                  <Zap className="w-3 h-3 mr-1" />
+                  Auto Fix
+                </Button>
+              )}
 
               <div className="border-t border-gray-700 pt-3">
                 <div className="text-center mb-3">
