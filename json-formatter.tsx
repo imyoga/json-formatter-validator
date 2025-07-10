@@ -69,6 +69,124 @@ function autoFixJson(jsonString: string): string {
   }
 }
 
+// JSON Syntax Highlighter Component
+function JsonSyntaxHighlighter({ json }: { json: string }) {
+  const highlightJson = (jsonString: string) => {
+    // Tokenize and highlight JSON
+    const tokens = []
+    let i = 0
+    
+    while (i < jsonString.length) {
+      const char = jsonString[i]
+      
+      // Handle whitespace
+      if (/\s/.test(char)) {
+        tokens.push({ type: 'whitespace', value: char })
+        i++
+        continue
+      }
+      
+      // Handle strings
+      if (char === '"') {
+        let str = '"'
+        i++
+        let isEscaped = false
+        
+        while (i < jsonString.length) {
+          const nextChar = jsonString[i]
+          str += nextChar
+          
+          if (nextChar === '"' && !isEscaped) {
+            i++
+            break
+          }
+          
+          isEscaped = nextChar === '\\' && !isEscaped
+          i++
+        }
+        
+        // Determine if this is a key (followed by colon) or value
+        let j = i
+        while (j < jsonString.length && /\s/.test(jsonString[j])) j++
+        const isKey = jsonString[j] === ':'
+        
+        tokens.push({ type: isKey ? 'key' : 'string', value: str })
+        continue
+      }
+      
+      // Handle numbers
+      if (/[-\d]/.test(char)) {
+        let num = ''
+        while (i < jsonString.length && /[-\d.eE+]/.test(jsonString[i])) {
+          num += jsonString[i]
+          i++
+        }
+        tokens.push({ type: 'number', value: num })
+        continue
+      }
+      
+      // Handle booleans and null
+      if (char === 't' && jsonString.substr(i, 4) === 'true') {
+        tokens.push({ type: 'boolean', value: 'true' })
+        i += 4
+        continue
+      }
+      if (char === 'f' && jsonString.substr(i, 5) === 'false') {
+        tokens.push({ type: 'boolean', value: 'false' })
+        i += 5
+        continue
+      }
+      if (char === 'n' && jsonString.substr(i, 4) === 'null') {
+        tokens.push({ type: 'null', value: 'null' })
+        i += 4
+        continue
+      }
+      
+      // Handle punctuation
+      if (/[{}[\],:]/.test(char)) {
+        tokens.push({ type: 'punctuation', value: char })
+        i++
+        continue
+      }
+      
+      // Default case
+      tokens.push({ type: 'default', value: char })
+      i++
+    }
+    
+    return tokens
+  }
+
+  const tokens = highlightJson(json)
+  
+  return (
+    <div 
+      className="font-['Roboto_Mono'] text-xs leading-relaxed whitespace-pre-wrap"
+      style={{
+        lineHeight: '1.5rem',
+        fontSize: '0.75rem'
+      }}
+    >
+      {tokens.map((token, index) => (
+        <span
+          key={index}
+          className={
+            token.type === 'key' ? 'text-blue-300' :
+            token.type === 'string' ? 'text-green-300' :
+            token.type === 'number' ? 'text-orange-300' :
+            token.type === 'boolean' ? 'text-purple-300' :
+            token.type === 'null' ? 'text-red-300' :
+            token.type === 'punctuation' ? 'text-gray-300' :
+            'text-gray-100'
+          }
+        >
+          {token.value}
+        </span>
+      ))}
+    </div>
+  )
+}
+
 // Custom component for textarea with line numbers and error highlighting
 interface LineNumberTextareaProps {
   value: string
@@ -77,11 +195,13 @@ interface LineNumberTextareaProps {
   readOnly?: boolean
   className?: string
   errorInfo?: JsonError | null
+  withSyntaxHighlighting?: boolean
 }
 
-function LineNumberTextarea({ value, onChange, placeholder, readOnly, className, errorInfo }: LineNumberTextareaProps) {
+function LineNumberTextarea({ value, onChange, placeholder, readOnly, className, errorInfo, withSyntaxHighlighting = false }: LineNumberTextareaProps) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lineNumbersRef = useRef<HTMLDivElement>(null)
+  const highlightRef = useRef<HTMLDivElement>(null)
 
   const lines = value.split('\n')
   const lineCount = lines.length
@@ -105,6 +225,9 @@ function LineNumberTextarea({ value, onChange, placeholder, readOnly, className,
     if (textareaRef.current && lineNumbersRef.current) {
       lineNumbersRef.current.scrollTop = textareaRef.current.scrollTop
     }
+    if (textareaRef.current && highlightRef.current) {
+      highlightRef.current.scrollTop = textareaRef.current.scrollTop
+    }
   }
 
   useEffect(() => {
@@ -116,23 +239,28 @@ function LineNumberTextarea({ value, onChange, placeholder, readOnly, className,
   }, [])
 
   return (
-    <div className="relative flex">
+    <div className="relative flex h-full">
       {/* Line numbers */}
       <div
         ref={lineNumbersRef}
-        className="flex-shrink-0 bg-gray-750 border-r border-gray-600 text-gray-400 text-xs font-['Roboto_Mono'] leading-relaxed overflow-hidden"
+        className="flex-shrink-0 bg-gray-800 border-r border-gray-600 text-gray-400 text-xs font-['Roboto_Mono'] leading-relaxed overflow-hidden"
         style={{
-          width: `${Math.max(2, Math.floor(Math.log10(lineCount)) + 1) * 0.6 + 1}rem`,
-          maxHeight: '650px'
+          width: `${Math.max(2, Math.floor(Math.log10(lineCount)) + 1) * 0.5 + 0.8}rem`,
+          paddingTop: '0.5rem',
+          paddingBottom: '0.5rem'
         }}
       >
         {Array.from({ length: lineCount }, (_, i) => (
           <div
             key={i + 1}
-            className={`px-2 text-right select-none ${
+            className={`px-1.5 text-right select-none ${
               errorLine === i + 1 ? 'bg-red-900 text-red-300' : ''
             }`}
-            style={{ height: '1.5rem', lineHeight: '1.5rem' }}
+            style={{ 
+              height: '1.5rem', 
+              lineHeight: '1.5rem',
+              fontSize: '0.75rem'
+            }}
           >
             {i + 1}
             {errorLine === i + 1 && (
@@ -141,6 +269,26 @@ function LineNumberTextarea({ value, onChange, placeholder, readOnly, className,
           </div>
         ))}
       </div>
+      
+      {/* Syntax highlighting overlay */}
+      {withSyntaxHighlighting && (
+        <div
+          ref={highlightRef}
+          className="absolute overflow-hidden pointer-events-none bg-gray-800 border border-gray-700 rounded-r-md"
+          style={{
+            left: `${Math.max(2, Math.floor(Math.log10(lineCount)) + 1) * 0.5 + 0.8}rem`,
+            right: '15px', // Leave space for scrollbar
+            top: 0,
+            bottom: 0,
+            paddingTop: '0.5rem',
+            paddingBottom: '0.5rem',
+            paddingLeft: '0.5rem',
+            paddingRight: '0.5rem'
+          }}
+        >
+          <JsonSyntaxHighlighter json={value} />
+        </div>
+      )}
       
       {/* Textarea */}
       <Textarea
@@ -151,7 +299,15 @@ function LineNumberTextarea({ value, onChange, placeholder, readOnly, className,
         readOnly={readOnly}
         className={`${className} rounded-l-none border-l-0 ${
           errorLine ? 'border-red-600' : ''
-        }`}
+        } ${withSyntaxHighlighting ? 'text-transparent selection:bg-blue-500 selection:bg-opacity-30 placeholder:text-gray-400' : ''}`}
+        style={{ 
+          height: '100%',
+          caretColor: withSyntaxHighlighting ? '#60a5fa' : 'inherit', // Bright blue cursor
+          paddingTop: '0.5rem',
+          paddingBottom: '0.5rem',
+          lineHeight: '1.5rem',
+          fontSize: '0.75rem'
+        }}
       />
       
       {/* Error position indicator */}
@@ -161,11 +317,11 @@ function LineNumberTextarea({ value, onChange, placeholder, readOnly, className,
             className="text-red-400 font-bold"
             style={{
               position: 'absolute',
-              left: `${Math.max(2, Math.floor(Math.log10(lineCount)) + 1) * 0.6 + 1}rem`,
-              top: `${(errorLine - 1) * 1.5}rem`,
+              left: `${Math.max(2, Math.floor(Math.log10(lineCount)) + 1) * 0.5 + 0.8}rem`,
+              top: `${(errorLine - 1) * 1.5 + 0.5}rem`, // Account for padding
               fontSize: '12px',
               lineHeight: '1.5rem',
-              paddingLeft: `${(errorColumn - 1) * 0.6}ch`
+              paddingLeft: `${(errorColumn - 1) * 0.5 + 0.5}ch` // Account for padding
             }}
           >
             ↑
@@ -295,14 +451,14 @@ export default function JsonFormatter() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 p-4 text-gray-200">
-      <div className="max-w-full mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-bold text-gray-100">JSON Formatter & Validator</h1>
+    <div className="h-screen bg-gray-950 p-2 text-gray-200 flex flex-col">
+      <div className="flex-1 w-full flex flex-col">
+        <div className="flex items-center justify-between mb-3">
+          <h1 className="text-lg font-semibold text-gray-100">JSON Formatter & Validator</h1>
           {isValid === false && errorInfo && (
-            <Alert variant="destructive" className="ml-4 bg-red-900 border-red-800 w-auto max-w-md">
-              <AlertTriangle className="h-4 w-4 text-white" />
-              <AlertDescription className="text-sm text-white">
+            <Alert variant="destructive" className="ml-4 bg-red-900 border-red-800 w-auto max-w-md py-2">
+              <AlertTriangle className="h-3 w-3 text-white" />
+              <AlertDescription className="text-xs text-white">
                 <div className="font-medium mb-1">JSON Error:</div>
                 <div className="text-xs">{errorInfo.message}</div>
                 {(errorInfo.line || errorInfo.position !== undefined) && (
@@ -317,49 +473,48 @@ export default function JsonFormatter() {
           )}
         </div>
 
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-4 items-start">
+        <div className="flex-1 grid grid-cols-[1fr_auto_1fr] gap-2 items-stretch w-full">
           {/* Input Section */}
-          <Card className="h-fit bg-gray-900 border-gray-800">
-            <CardHeader className="pb-3">
+          <Card className="bg-gray-900 border-gray-800 flex flex-col w-full min-w-0" style={{ maxHeight: 'calc(100vh - 100px)' }}>
+            <CardHeader className="pb-2 py-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-lg text-gray-100">
-                  <FileText className="w-4 h-4" />
+                <CardTitle className="flex items-center gap-2 text-sm text-gray-100">
+                  <FileText className="w-3 h-3" />
                   JSON Input
                 </CardTitle>
                 <div className="flex items-center gap-2">
                   {isValid === true && (
-                    <Badge variant="default" className="bg-green-700 text-xs">
-                      <CheckCircle className="w-3 h-3 mr-1" />
+                    <Badge variant="default" className="bg-green-700 text-xs h-5">
+                      <CheckCircle className="w-2 h-2 mr-1" />
                       Valid
                     </Badge>
                   )}
                   {isValid === false && (
-                    <Badge variant="destructive" className="text-xs">
-                      <XCircle className="w-3 h-3 mr-1" />
+                    <Badge variant="destructive" className="text-xs h-5">
+                      <XCircle className="w-2 h-2 mr-1" />
                       Invalid
                     </Badge>
                   )}
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="pt-0">
-              {/* JSON Input Textarea with Line Numbers and Error Highlighting */}
+            <CardContent className="pt-0 pb-2 flex-1 flex flex-col overflow-hidden">
               <LineNumberTextarea
                 placeholder="Paste your JSON here..."
                 value={jsonInput}
                 onChange={handleInputChange}
                 errorInfo={errorInfo}
-                className="min-h-[650px] font-['Roboto_Mono'] text-xs leading-relaxed bg-gray-800 border-gray-700 text-gray-100 resize-none"
+                className="flex-1 font-['Roboto_Mono'] text-xs leading-relaxed bg-gray-800 border-gray-700 text-gray-100 resize-none w-full"
               />
             </CardContent>
           </Card>
 
           {/* Action Buttons Divider */}
-          <div className="flex flex-col items-center justify-center min-h-[600px]">
-            <div className="bg-gray-800 rounded-lg border border-gray-700 shadow-md p-4 space-y-3 w-40">
-              <Button variant="outline" size="sm" className="w-full relative overflow-hidden bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 transition-colors">
+          <div className="flex flex-col items-center justify-center">
+            <div className="bg-gray-800 rounded-lg border border-gray-700 shadow-md p-3 space-y-2 w-32">
+              <Button variant="outline" size="sm" className="w-full relative overflow-hidden bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 transition-colors h-7 text-xs">
                 <Upload className="w-3 h-3 mr-1" />
-                Upload JSON
+                Upload
                 <input
                   type="file"
                   accept=".json,application/json"
@@ -374,25 +529,25 @@ export default function JsonFormatter() {
                   onClick={tryAutoFix}
                   variant="outline"
                   size="sm"
-                  className="w-full bg-yellow-700 border-yellow-600 text-yellow-100 hover:bg-yellow-600 hover:border-yellow-500 transition-colors"
+                  className="w-full bg-yellow-700 border-yellow-600 text-yellow-100 hover:bg-yellow-600 hover:border-yellow-500 transition-colors h-7 text-xs"
                 >
                   <Zap className="w-3 h-3 mr-1" />
                   Auto Fix
                 </Button>
               )}
 
-              <div className="border-t border-gray-700 pt-3">
-                <div className="text-center mb-3">
-                  <ArrowRight className="w-5 h-5 mx-auto text-gray-400" />
+              <div className="border-t border-gray-700 pt-2">
+                <div className="text-center mb-2">
+                  <ArrowRight className="w-4 h-4 mx-auto text-gray-400" />
                 </div>
                 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <Button
                     onClick={beautifyJson}
                     disabled={!isValid}
                     variant="outline"
                     size="sm"
-                    className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+                    className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors h-7 text-xs"
                   >
                     <Sparkles className="w-3 h-3 mr-1" />
                     Beautify
@@ -403,7 +558,7 @@ export default function JsonFormatter() {
                     disabled={!isValid}
                     variant="outline"
                     size="sm"
-                    className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+                    className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors h-7 text-xs"
                   >
                     <Minimize2 className="w-3 h-3 mr-1" />
                     Minify
@@ -417,7 +572,7 @@ export default function JsonFormatter() {
                   variant="outline"
                   onClick={copyToClipboard}
                   disabled={!formattedJson}
-                  className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+                  className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors h-7 text-xs"
                 >
                   <Copy className="w-3 h-3 mr-1" />
                   Copy
@@ -428,7 +583,7 @@ export default function JsonFormatter() {
                   variant="outline"
                   onClick={downloadJson}
                   disabled={!formattedJson}
-                  className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors"
+                  className="w-full bg-gray-700 border-gray-600 text-gray-200 hover:bg-gray-600 hover:border-gray-500 disabled:bg-gray-800 disabled:border-gray-700 disabled:text-gray-500 disabled:cursor-not-allowed transition-colors h-7 text-xs"
                 >
                   <Download className="w-3 h-3 mr-1" />
                   Download
@@ -438,24 +593,25 @@ export default function JsonFormatter() {
           </div>
 
           {/* Output Section */}
-          <Card className="h-fit bg-gray-900 border-gray-800">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-lg text-gray-100">
-                <Sparkles className="w-4 h-4" />
+          <Card className="bg-gray-900 border-gray-800 flex flex-col w-full min-w-0" style={{ maxHeight: 'calc(100vh - 100px)' }}>
+            <CardHeader className="pb-2 py-3">
+              <CardTitle className="flex items-center gap-2 text-sm text-gray-100">
+                <Sparkles className="w-3 h-3" />
                 Formatted JSON
               </CardTitle>
             </CardHeader>
-            <CardContent className="pt-0">
+            <CardContent className="pt-0 pb-2 flex-1 flex flex-col overflow-hidden">
               {formattedJson ? (
                 <LineNumberTextarea
                   value={formattedJson}
                   readOnly
-                  className="min-h-[650px] font-['Roboto_Mono'] text-xs leading-relaxed bg-gray-800 border-gray-700 text-gray-100 resize-none"
+                  withSyntaxHighlighting
+                  className="flex-1 font-['Roboto_Mono'] text-xs leading-relaxed bg-gray-800 border-gray-700 text-gray-100 resize-none w-full"
                 />
               ) : (
-                <div className="min-h-[650px] border-2 border-dashed border-gray-700 rounded-lg flex items-center justify-center bg-gray-800">
+                <div className="flex-1 border-2 border-dashed border-gray-700 rounded-lg flex items-center justify-center bg-gray-800 w-full">
                   <div className="text-center text-gray-400">
-                    <FileText className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                    <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
                     <p className="text-sm">Formatted JSON will appear here</p>
                     <p className="text-xs">Enter valid JSON on the left to see the result</p>
                   </div>
